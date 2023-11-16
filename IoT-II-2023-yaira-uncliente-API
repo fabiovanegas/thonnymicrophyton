@@ -1,0 +1,66 @@
+import json
+import boto3
+from datetime import datetime, timedelta
+
+def lambda_handler(event, context):
+    # Conexión a DynamoDB
+    dynamodb = boto3.resource('dynamodb')
+    table = dynamodb.Table('/yaira_data')
+
+    # Imprimir el evento recibido
+    print(event)
+
+    # Asegurar que 'requestContext' exista antes de intentar acceder a 'routeKey'
+    if 'requestContext' in event and 'routeKey' in event['requestContext']:
+        if event['requestContext']['routeKey'] == '$connect':
+            # Manejar la conexión
+            connectionid = event['requestContext']['connectionId']
+            print("Evento de conexión:", event)
+
+            # Obtener item de la tabla DynamoDB
+            response = table.get_item(
+                Key={'id_key': "connectionid"}
+            )
+
+            # Actualizar o insertar un nuevo item en la tabla
+            if 'Item' in response:
+                response = table.update_item(
+                    Key={
+                        'id_key': "connectionid"
+                    },
+                    UpdateExpression="set id=:id",
+                    ExpressionAttributeValues={
+                        ':id': connectionid
+                    },
+                    ReturnValues="UPDATED_NEW"
+                )
+            else:
+                table.put_item(
+                    Item={'id_key': "connectionid", 'id': connectionid}
+                )
+
+        elif event['requestContext']['routeKey'] == '$disconnect':
+            # Manejar la desconexión
+            response = table.delete_item(
+                Key={'id_key': "connectionid"}
+            )
+
+        elif event['requestContext']['routeKey'] == 'customEvent':
+            # Obtener la fecha timestamp del evento
+            timestamp = event.get('timestamp')
+            
+            if timestamp:
+                # Convertir la timestamp a objeto de fecha
+                date_object = datetime.utcfromtimestamp(timestamp)
+                
+                # Obtener las tres fechas siguientes
+                next_dates = [date_object + timedelta(days=i) for i in range(4)]
+
+                # Imprimir las fechas
+                print("Fecha y tres siguientes:", [str(date) for date in next_dates])
+
+    # Respuesta genérica
+    return {
+        'statusCode': 200,
+        'body': json.dumps('¡Hola desde Lambda!')
+    }
